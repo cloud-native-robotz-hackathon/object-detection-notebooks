@@ -5,10 +5,10 @@ from boto3 import client
 
 
 model_object_prefix = environ.get('model_object_prefix', 'model')
-s3_endpoint_url = environ.get('AWS_S3_ENDPOINT')
-s3_access_key = environ.get('AWS_ACCESS_KEY_ID')
-s3_secret_key = environ.get('AWS_SECRET_ACCESS_KEY')
-s3_bucket_name = environ.get('AWS_S3_BUCKET')
+s3_endpoint_url = environ.get('UPLOAD_AWS_S3_ENDPOINT')
+s3_access_key = environ.get('UPLOAD_AWS_ACCESS_KEY_ID')
+s3_secret_key = environ.get('UPLOAD_AWS_SECRET_ACCESS_KEY')
+s3_bucket_name = environ.get('UPLOAD_AWS_S3_BUCKET')
 
 
 def upload_model(model_object_prefix='model', version=''):

@@ -380,22 +380,22 @@
             "env_vars": [],
             "kubernetes_secrets": [
               {
-                "env_var": "AWS_SECRET_ACCESS_KEY",
+                "env_var": "UPLOAD_AWS_SECRET_ACCESS_KEY",
                 "name": "workbench-bucket-ai-connection",
                 "key": "AWS_SECRET_ACCESS_KEY"
               },
               {
-                "env_var": "AWS_ACCESS_KEY_ID",
+                "env_var": "UPLOAD_AWS_ACCESS_KEY_ID",
                 "name": "workbench-bucket-ai-connection",
                 "key": "AWS_ACCESS_KEY_ID"
               },
               {
-                "env_var": "AWS_S3_BUCKET",
+                "env_var": "UPLOAD_AWS_S3_BUCKET",
                 "name": "workbench-bucket-ai-connection",
                 "key": "AWS_S3_BUCKET"
               },
               {
-                "env_var": "AWS_S3_ENDPOINT",
+                "env_var": "UPLOAD_AWS_S3_ENDPOINT",
                 "name": "workbench-bucket-ai-connection",
                 "key": "AWS_S3_ENDPOINT"
               }
