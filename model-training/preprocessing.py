@@ -25,14 +25,6 @@ def preprocess_data(data_folder='./data'):
         for folder_name in folder_names
     ]
 
-    duplicates_0_1 = images[0] & images[1]
-    duplicates_1_2 = images[1] & images[2]
-    duplicates_2_0 = images[2] & images[0]
-
-    images[0] -= duplicates_0_1
-    images[1] -= duplicates_1_2
-    images[2] -= duplicates_2_0
-
     random.seed(42)
     train_ratio = 0.75
     val_ratio = 0.125

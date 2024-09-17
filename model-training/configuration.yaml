@@ -4,7 +4,7 @@ val:   /data/images/val
 test:  /data/images/test
 
 # Number of classes
-nc: 3
+nc: 1
 
-# Class names 0 - bicycle, 1 - car, 3 - traffic sign
-names: ['Laptop', 'Computer keyboard', 'Table']
+# Class names 0 - Laptop
+names: ['Laptop',]

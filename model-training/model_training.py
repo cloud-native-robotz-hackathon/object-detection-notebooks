@@ -10,7 +10,7 @@ def train_model(
 
     batch_size = batch_size or int(environ.get('batch_size', 4))
     epochs = epochs or int(environ.get('epochs', 2))
-    base_model = base_model or environ.get('base_model', 'yolov5m')
+    base_model = environ.get('base_model', 'yolov5n')
 
     run(
         data='configuration.yaml',
