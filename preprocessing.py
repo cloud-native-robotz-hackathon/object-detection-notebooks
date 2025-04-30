@@ -93,8 +93,9 @@ def _letterbox_image(
     left, right = int(dw_half), int(dw_half + 0.5)
 
     im = ImageOps.expand(im, border=(left, top, right, bottom), fill=color)
-
-    return im, r, (dw, dh)
+    
+    # return padding/2 to correct bounding box position
+    return im, r, (dw_half, dh_half)
 
 
 if __name__ == '__main__':
