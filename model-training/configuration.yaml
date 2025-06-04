@@ -7,4 +7,4 @@ test:  /data/images/test
 nc: 1
 
 # Class names 0 - Laptop
-names: ['Laptop',]
+names: ['Fedora',]
