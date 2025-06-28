@@ -19,6 +19,7 @@ def train_model(
         batch_size=batch_size,
         freeze=[10],
         cache='disk',
+        patience=50,
     )
 
     move('yolov5/runs/train/exp/weights/best.pt', 'model.pt')
