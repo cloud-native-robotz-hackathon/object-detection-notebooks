@@ -33,7 +33,9 @@
               "kubernetes_shared_mem_size": {},
               "kubernetes_tolerations": [],
               "mounted_volumes": [],
-              "filename": "data_ingestion.py"
+              "filename": "data_ingestion.py",
+              "cpu": 2,
+              "memory": 4
             },
             "label": "",
             "ui_data": {
@@ -97,7 +99,7 @@
               "kubernetes_pod_labels": [],
               "kubernetes_secrets": [],
               "kubernetes_shared_mem_size": {
-                "size": 10
+                "size": 4
               },
               "kubernetes_tolerations": [],
               "mounted_volumes": [
@@ -109,7 +111,8 @@
               ],
               "filename": "model_training.py",
               "gpu": 0,
-              "memory": 8
+              "memory": 8,
+              "cpu": 4
             },
             "label": "",
             "ui_data": {
@@ -174,7 +177,9 @@
               "kubernetes_shared_mem_size": {},
               "kubernetes_tolerations": [],
               "mounted_volumes": [],
-              "filename": "preprocessing.py"
+              "filename": "preprocessing.py",
+              "cpu": 2,
+              "memory": 8
             },
             "label": "",
             "ui_data": {
@@ -241,7 +246,9 @@
               "kubernetes_shared_mem_size": {},
               "kubernetes_tolerations": [],
               "mounted_volumes": [],
-              "filename": "model_conversion.py"
+              "filename": "model_conversion.py",
+              "cpu": 2,
+              "memory": 4
             },
             "label": "",
             "ui_data": {
@@ -312,7 +319,9 @@
               "kubernetes_shared_mem_size": {},
               "kubernetes_tolerations": [],
               "mounted_volumes": [],
-              "filename": "model_upload.py"
+              "filename": "model_upload.py",
+              "cpu": 1,
+              "memory": 2
             },
             "label": "",
             "ui_data": {
@@ -371,7 +380,7 @@
           "runtime": "Data Science Pipelines",
           "pipeline_defaults": {
             "kubernetes_shared_mem_size": {
-              "size": 10
+              "size": 4
             },
             "mounted_volumes": [
               {
@@ -414,7 +423,7 @@
               "description": "",
               "default_value": {
                 "type": "Integer",
-                "value": 5000
+                "value": 1000
               },
               "required": false
             },
@@ -423,7 +432,7 @@
               "description": "",
               "default_value": {
                 "type": "Integer",
-                "value": 64
+                "value": 16
               },
               "required": false
             },
@@ -432,7 +441,7 @@
               "description": "",
               "default_value": {
                 "type": "Integer",
-                "value": 8
+                "value": 5
               },
               "required": false
             },
