@@ -37,6 +37,7 @@ def train_model(
         weights=f'{base_model}.pt',
         epochs=epochs,
         batch_size=batch_size,
+        perfomance-tuning
         freeze=[10],  # Freeze first 10 layers for faster training
         cache='ram',  # Use RAM caching for faster data loading
         device=device,
