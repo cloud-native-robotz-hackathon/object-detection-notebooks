@@ -11,7 +11,7 @@ def ingest_data(data_folder='./data', limit=0):
 
     print('Commencing data ingestion.')
 
-    limit = limit or int(environ.get('sample_count', 100))
+    limit = limit or int(environ.get('sample_count', 1000))
     download_folder = f'{data_folder}/download'
 
     download_dataset(

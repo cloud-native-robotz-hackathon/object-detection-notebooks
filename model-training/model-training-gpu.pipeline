@@ -33,7 +33,9 @@
               "kubernetes_shared_mem_size": {},
               "kubernetes_tolerations": [],
               "mounted_volumes": [],
-              "filename": "data_ingestion.py"
+              "filename": "data_ingestion.py",
+              "cpu": 4,
+              "memory": 8
             },
             "label": "",
             "ui_data": {
@@ -97,7 +99,7 @@
               "kubernetes_pod_labels": [],
               "kubernetes_secrets": [],
               "kubernetes_shared_mem_size": {
-                "size": 10
+                "size": 32
               },
               "kubernetes_tolerations": [
                 {
@@ -119,7 +121,8 @@
               ],
               "filename": "model_training.py",
               "gpu": 1,
-              "memory": 8
+              "memory": 24,
+              "cpu": 8
             },
             "label": "",
             "ui_data": {
@@ -184,7 +187,9 @@
               "kubernetes_shared_mem_size": {},
               "kubernetes_tolerations": [],
               "mounted_volumes": [],
-              "filename": "preprocessing.py"
+              "filename": "preprocessing.py",
+              "cpu": 4,
+              "memory": 16
             },
             "label": "",
             "ui_data": {
@@ -251,7 +256,9 @@
               "kubernetes_shared_mem_size": {},
               "kubernetes_tolerations": [],
               "mounted_volumes": [],
-              "filename": "model_conversion.py"
+              "filename": "model_conversion.py",
+              "cpu": 4,
+              "memory": 8
             },
             "label": "",
             "ui_data": {
@@ -322,7 +329,9 @@
               "kubernetes_shared_mem_size": {},
               "kubernetes_tolerations": [],
               "mounted_volumes": [],
-              "filename": "model_upload.py"
+              "filename": "model_upload.py",
+              "cpu": 2,
+              "memory": 4
             },
             "label": "",
             "ui_data": {
@@ -391,7 +400,7 @@
             "kubernetes_tolerations": [],
             "kubernetes_pod_labels": [],
             "kubernetes_shared_mem_size": {
-              "size": 10
+              "size": 32
             },
             "kubernetes_secrets": [
               {
