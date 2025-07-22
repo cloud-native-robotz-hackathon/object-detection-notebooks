@@ -121,8 +121,8 @@
               ],
               "filename": "model_training.py",
               "gpu": 1,
-              "memory": 24,
-              "cpu": 8
+              "memory": 12,
+              "cpu": 3
             },
             "label": "",
             "ui_data": {
