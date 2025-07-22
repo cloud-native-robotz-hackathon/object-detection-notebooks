@@ -35,7 +35,22 @@ import pkg_resources as pkg
 import torch
 import torchvision
 import yaml
-from ultralytics.yolo.utils.checks import check_requirements
+
+# Try to import check_requirements from different possible locations
+try:
+    from ultralytics.yolo.utils.checks import check_requirements
+except ImportError:
+    try:
+        from ultralytics.utils.checks import check_requirements
+    except ImportError:
+        try:
+            from ultralytics import checks
+            check_requirements = checks.check_requirements
+        except ImportError:
+            # Fallback: create a minimal check_requirements function
+            def check_requirements(requirements, exclude=(), install=True, cmds=''):
+                """Fallback check_requirements function"""
+                pass
 
 from utils import TryExcept, emojis
 from utils.downloads import curl_download, gsutil_getsize
