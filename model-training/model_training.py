@@ -14,12 +14,15 @@ def train_model(
     epochs = epochs or int(environ.get('epochs', 5))
     base_model = environ.get('base_model', 'yolov5n')
     
-    # Check if GPU is available
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # Check if GPU is available AND has actual devices
+    gpu_available = torch.cuda.is_available() and torch.cuda.device_count() > 0
+    device = '0' if gpu_available else 'cpu'  # YOLOv5 expects '0' for first GPU, not 'cuda'
+    print(f'CUDA available: {torch.cuda.is_available()}')
+    print(f'CUDA device count: {torch.cuda.device_count() if torch.cuda.is_available() else 0}')
     print(f'Using device: {device}')
     
     # Optimize batch size for GPU memory
-    if device == 'cuda':
+    if device == '0':  # GPU device
         # Get GPU memory
         gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1e9
         print(f'GPU memory: {gpu_memory:.1f} GB')
