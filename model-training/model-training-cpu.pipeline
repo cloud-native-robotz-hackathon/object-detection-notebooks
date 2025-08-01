@@ -423,7 +423,7 @@
               "description": "",
               "default_value": {
                 "type": "Integer",
-                "value": 1000
+                "value": 1700
               },
               "required": false
             },
@@ -441,7 +441,7 @@
               "description": "",
               "default_value": {
                 "type": "Integer",
-                "value": 5
+                "value": 8
               },
               "required": false
             },
