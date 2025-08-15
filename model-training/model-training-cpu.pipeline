@@ -9,73 +9,6 @@
       "id": "primary",
       "nodes": [
         {
-          "id": "09b48e95-e953-4a59-977b-bc751bc45798",
-          "type": "execution_node",
-          "op": "execute-python-node",
-          "app_data": {
-            "component_parameters": {
-              "pipeline_parameters": [
-                "sample_count"
-              ],
-              "dependencies": [
-                "configuration.yaml"
-              ],
-              "include_subdirectories": false,
-              "outputs": [],
-              "env_vars": [
-                {
-                  "env_var": "sample_count"
-                }
-              ],
-              "kubernetes_pod_annotations": [],
-              "kubernetes_pod_labels": [],
-              "kubernetes_secrets": [],
-              "kubernetes_shared_mem_size": {},
-              "kubernetes_tolerations": [],
-              "mounted_volumes": [],
-              "filename": "data_ingestion.py",
-              "cpu": 2,
-              "memory": 4
-            },
-            "label": "",
-            "ui_data": {
-              "label": "data_ingestion.py",
-              "image": "/notebook/od-project/development/static/elyra/python.svg",
-              "x_pos": 199,
-              "y_pos": 267,
-              "description": "Run Python script"
-            }
-          },
-          "inputs": [
-            {
-              "id": "inPort",
-              "app_data": {
-                "ui_data": {
-                  "cardinality": {
-                    "min": 0,
-                    "max": -1
-                  },
-                  "label": "Input Port"
-                }
-              }
-            }
-          ],
-          "outputs": [
-            {
-              "id": "outPort",
-              "app_data": {
-                "ui_data": {
-                  "cardinality": {
-                    "min": 0,
-                    "max": -1
-                  },
-                  "label": "Output Port"
-                }
-              }
-            }
-          ]
-        },
-        {
           "id": "b40184b7-b124-4c6a-8fc0-1a58db3859fc",
           "type": "execution_node",
           "op": "execute-python-node",
@@ -117,7 +50,7 @@
             "label": "",
             "ui_data": {
               "label": "model_training.py",
-              "image": "/notebook/od-project/development/static/elyra/python.svg",
+              "image": "/notebook/team-1-ai/fedora-detection/static/elyra/python.svg",
               "x_pos": 671,
               "y_pos": 266,
               "description": "Run Python script"
@@ -184,7 +117,7 @@
             "label": "",
             "ui_data": {
               "label": "preprocessing.py",
-              "image": "/notebook/od-project/development/static/elyra/python.svg",
+              "image": "/notebook/team-1-ai/fedora-detection/static/elyra/python.svg",
               "x_pos": 428,
               "y_pos": 260,
               "description": "Run Python script"
@@ -201,14 +134,7 @@
                   },
                   "label": "Input Port"
                 }
-              },
-              "links": [
-                {
-                  "id": "2627b0ee-8ed7-4fc2-9381-14726af10260",
-                  "node_id_ref": "09b48e95-e953-4a59-977b-bc751bc45798",
-                  "port_id_ref": "outPort"
-                }
-              ]
+              }
             }
           ],
           "outputs": [
@@ -253,7 +179,7 @@
             "label": "",
             "ui_data": {
               "label": "model_conversion.py",
-              "image": "/notebook/od-project/development/static/elyra/python.svg",
+              "image": "/notebook/team-1-ai/fedora-detection/static/elyra/python.svg",
               "x_pos": 895,
               "y_pos": 267,
               "description": "Run Python script"
@@ -326,7 +252,7 @@
             "label": "",
             "ui_data": {
               "label": "model_upload.py",
-              "image": "/notebook/od-project/development/static/elyra/python.svg",
+              "image": "/notebook/team-1-ai/fedora-detection/static/elyra/python.svg",
               "x_pos": 1106,
               "y_pos": 269,
               "description": "Run Python script"
@@ -382,6 +308,7 @@
             "kubernetes_shared_mem_size": {
               "size": 4
             },
+            "kubernetes_pod_labels": [],
             "mounted_volumes": [
               {
                 "path": "/data",
@@ -389,10 +316,8 @@
                 "read_only": false
               }
             ],
-            "kubernetes_pod_labels": [],
             "kubernetes_tolerations": [],
             "kubernetes_pod_annotations": [],
-            "env_vars": [],
             "kubernetes_secrets": [
               {
                 "env_var": "UPLOAD_AWS_SECRET_ACCESS_KEY",
@@ -415,18 +340,10 @@
                 "key": "AWS_S3_ENDPOINT"
               }
             ],
+            "env_vars": [],
             "runtime_image": "quay.io/cloud-native-robotz-hackathon/pipeline-runtime-image:v2.25"
           },
           "pipeline_parameters": [
-            {
-              "name": "sample_count",
-              "description": "",
-              "default_value": {
-                "type": "Integer",
-                "value": 1700
-              },
-              "required": false
-            },
             {
               "name": "batch_size",
               "description": "",
@@ -441,7 +358,7 @@
               "description": "",
               "default_value": {
                 "type": "Integer",
-                "value": 8
+                "value": 80
               },
               "required": false
             },
