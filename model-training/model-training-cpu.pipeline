@@ -358,7 +358,7 @@
               "description": "",
               "default_value": {
                 "type": "Integer",
-                "value": 80
+                "value": 300
               },
               "required": false
             },
