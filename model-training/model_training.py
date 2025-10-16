@@ -149,7 +149,7 @@ def train_model(
                 project='runs/train',
                 exist_ok=True,
                 save_period=5,  # Save checkpoint every 5 epochs
-                patience=10,  # Early stopping patience
+                patience=50,  # Early stopping patience
                 # Optimizations for faster training
                 single_cls=True,  # Single class optimization
                 rect=True,  # Rectangular training for efficiency
