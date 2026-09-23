@@ -8,7 +8,7 @@ validation, upload monitoring, and verification with robust error handling.
 Key Features:
 - S3-compatible storage upload (MinIO, AWS S3, etc.)
 - Comprehensive credential and connection validation
-- Dual upload strategy (versioned + latest)
+- Dual upload strategy (versioned + latest) in OVMS/KServe layout
 - Upload integrity verification
 - Detailed progress monitoring and error reporting
 - Support for custom S3 endpoints and bucket configurations
@@ -17,9 +17,9 @@ Expected Input:
     - model.onnx: Converted ONNX model file from conversion step
 
 Output:
-    - Uploads model to S3 storage in two formats:
-        * models/{prefix}-{timestamp}.onnx (versioned)
-        * models/{prefix}-latest.onnx (latest)
+    - Uploads model to S3 storage in OVMS versioned layout:
+        * models/{prefix}/{timestamp}/model.onnx (versioned)
+        * models/{prefix}/1/model.onnx (latest / serving)
 
 Environment Variables Required:
     - UPLOAD_AWS_S3_ENDPOINT: S3 endpoint URL
@@ -28,11 +28,16 @@ Environment Variables Required:
     - UPLOAD_AWS_S3_BUCKET: Target S3 bucket name
     - model_object_prefix: Model naming prefix (optional)
 
-Storage Structure:
+Storage Structure (required by OpenVINO Model Server on KServe):
     bucket/
     └── models/
-        ├── {prefix}-{timestamp}.onnx
-        └── {prefix}-latest.onnx
+        └── {prefix}/
+            ├── 1/
+            │   └── model.onnx
+            └── {timestamp}/
+                └── model.onnx
+
+OpenShift AI model path: models/{prefix}  (do not include the version folder)
 
 Author: Generated for Robot Hackathon Object Detection Pipeline
 Version: 2.0 (Enhanced with comprehensive logging and error handling)
@@ -96,14 +101,15 @@ def upload_model(model_object_prefix='model', version=''):
     Upload Strategy:
         1. Validates all prerequisites (file exists, credentials set)
         2. Initializes and tests S3 client connection
-        3. Uploads versioned model: models/{prefix}-{version}.onnx
-        4. Uploads latest model: models/{prefix}-latest.onnx
+        3. Uploads versioned model: models/{prefix}/{version}/model.onnx
+        4. Uploads latest model: models/{prefix}/1/model.onnx
         5. Verifies both uploads completed successfully
     
-    Storage Naming Convention:
-        - Versioned: models/{prefix}-{timestamp}.onnx
-        - Latest: models/{prefix}-latest.onnx
+    Storage Naming Convention (OVMS/KServe):
+        - Versioned: models/{prefix}/{timestamp}/model.onnx
+        - Latest: models/{prefix}/1/model.onnx
         - Timestamp format: YYMMDDHHNN (e.g., 2412151430)
+        - Deploy with OpenShift AI path models/{prefix}
     
     Performance Monitoring:
         - Upload duration tracking for each file
@@ -149,13 +155,14 @@ def upload_model(model_object_prefix='model', version=''):
         logger.info("🧪 Testing S3 connection...")
         _test_s3_connection(s3_client)
         
-        # Generate model names
+        # Generate model names (OVMS requires numeric version directories)
         model_object_name = _generate_model_name(final_prefix, version=version)
-        model_object_name_latest = _generate_model_name(final_prefix, 'latest')
+        model_object_name_latest = _generate_model_name(final_prefix, '1')
         
         logger.info(f"📦 Upload targets:")
         logger.info(f"  📁 Versioned: {model_object_name}")
-        logger.info(f"  📁 Latest: {model_object_name_latest}")
+        logger.info(f"  📁 Latest (serving): {model_object_name_latest}")
+        logger.info(f"  📌 Deploy path: models/{final_prefix}")
         
         # Upload versioned model
         logger.info("📤 Uploading versioned model...")
@@ -182,9 +189,11 @@ def upload_model(model_object_prefix='model', version=''):
         logger.info("=" * 60)
         logger.info("MODEL UPLOAD COMPLETED SUCCESSFULLY!")
         logger.info("=" * 60)
+        serving_path = f'models/{final_prefix}'
         logger.info(f"📦 Uploaded models:")
         logger.info(f"  🔖 Versioned: {model_object_name}")
         logger.info(f"  🆕 Latest: {model_object_name_latest}")
+        logger.info(f"📌 OpenShift AI / OVMS model path: {serving_path}")
         logger.info(f"⏱️  Total time: {total_duration}")
         logger.info(f"🌐 Available at: {s3_endpoint_url}/{s3_bucket_name}/")
         logger.info(f"🏁 End time: {end_time}")
@@ -416,15 +425,16 @@ def _generate_model_name(model_object_prefix, version=''):
             a timestamp will be generated. Defaults to ''.
     
     Returns:
-        str: Properly formatted S3 object name (e.g., 'models/prefix-version.onnx').
+        str: OVMS/KServe S3 object key (e.g., 'models/prefix/1/model.onnx').
     
     Raises:
         ValueError: If model_object_prefix is empty or invalid.
     
     Naming Convention:
-        - Format: models/{prefix}-{version}.onnx
+        - Format: models/{prefix}/{version}/model.onnx
         - Prefix sanitization: removes invalid characters
-        - Version: timestamp (YYMMDDHHNN) if not provided
+        - Version: positive integer folder (OVMS requirement);
+          timestamp (YYMMDDHHNN) if not provided, or '1' for latest
     
     Sanitization:
         - Removes non-alphanumeric characters except hyphens and underscores
@@ -432,7 +442,8 @@ def _generate_model_name(model_object_prefix, version=''):
         - Ensures S3-compatible object names
     
     Notes:
-        - Follows project storage organization (models/ prefix)
+        - Layout required by OpenVINO Model Server on KServe (RHOAIENG-3025)
+        - OpenShift AI path should be models/{prefix} (without version folder)
         - Supports both custom versions and auto-generated timestamps
         - Validates input to prevent S3 object naming issues
     """
@@ -448,7 +459,8 @@ def _generate_model_name(model_object_prefix, version=''):
         logger.warning(f"⚠️  Sanitized model prefix: '{model_object_prefix}' → '{safe_prefix}'")
     
     final_version = version if version else _timestamp()
-    model_name = f'models/{safe_prefix}-{final_version}.onnx'
+    # OVMS requires numeric version directories under the model path
+    model_name = f'models/{safe_prefix}/{final_version}/model.onnx'
     
     logger.info(f"🏷️  Generated model name: {model_name}")
     return model_name
