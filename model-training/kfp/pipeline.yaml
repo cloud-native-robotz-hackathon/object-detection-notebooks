@@ -1,0 +1,422 @@
+# PIPELINE DEFINITION
+# Name: object-detection-model-training
+# Description: End-to-end YOLOv5 object-detection training pipeline (CPU).
+# Inputs:
+#    base_model: str [Default: 'yolov5n']
+#    batch_size: int [Default: 16.0]
+#    class_names: str [Default: 'Fedora']
+#    epochs: int [Default: 300.0]
+#    model_object_prefix: str [Default: 'model']
+components:
+  comp-convert-model:
+    executorLabel: exec-convert-model
+  comp-preprocess-data:
+    executorLabel: exec-preprocess-data
+    inputDefinitions:
+      parameters:
+        class_names:
+          parameterType: STRING
+  comp-train-model:
+    executorLabel: exec-train-model
+    inputDefinitions:
+      parameters:
+        base_model:
+          parameterType: STRING
+        batch_size:
+          parameterType: NUMBER_INTEGER
+        class_names:
+          parameterType: STRING
+        epochs:
+          parameterType: NUMBER_INTEGER
+  comp-upload-model:
+    executorLabel: exec-upload-model
+    inputDefinitions:
+      parameters:
+        model_object_prefix:
+          parameterType: STRING
+deploymentSpec:
+  executors:
+    exec-convert-model:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - convert_model
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef convert_model():\n    \"\"\"Convert the trained PyTorch model\
+          \ (.pt) to ONNX.\n\n    Reads /data/model.pt, writes /data/model.onnx.\n\
+          \    \"\"\"\n    import os\n    import subprocess\n    import sys\n    import\
+          \ types\n\n    # Install yolov5 (--no-deps) + huggingface_hub for weight\
+          \ loading\n    subprocess.run(\n        [sys.executable, '-m', 'pip', 'install',\n\
+          \         '--no-deps', 'yolov5',\n        ], check=True,\n    )\n    subprocess.run(\n\
+          \        [sys.executable, '-m', 'pip', 'install',\n         'huggingface_hub>=0.12.0,<0.25.0',\n\
+          \        ], check=True,\n    )\n    # Stub out 'roboflow' \u2014 not needed\
+          \ but imported by the pip package\n    _rf = types.ModuleType('roboflow')\n\
+          \    _rf.__path__ = []\n    _rf.Roboflow = type('Roboflow', (), {})\n  \
+          \  _rf_core = types.ModuleType('roboflow.core')\n    _rf_core.__path__ =\
+          \ []\n    _rf_core_ver = types.ModuleType('roboflow.core.version')\n   \
+          \ _rf_core_ver.Version = type('Version', (), {})\n    _rf.core = _rf_core\n\
+          \    _rf_core.version = _rf_core_ver\n    sys.modules.update({\n       \
+          \ 'roboflow': _rf,\n        'roboflow.core': _rf_core,\n        'roboflow.core.version':\
+          \ _rf_core_ver,\n    })\n\n    model_pt = '/data/model.pt'\n    if not os.path.exists(model_pt):\n\
+          \        raise FileNotFoundError(f'{model_pt} not found')\n\n    from yolov5.export\
+          \ import run as export_run\n\n    export_run(\n        weights=model_pt,\n\
+          \        include=['onnx'],\n        imgsz=(640, 640),\n        opset=13,\n\
+          \        device='cpu',\n        verbose=True,\n    )\n\n    model_onnx =\
+          \ '/data/model.onnx'\n    if not os.path.exists(model_onnx):\n        raise\
+          \ FileNotFoundError(\n            f'Conversion did not produce {model_onnx}'\n\
+          \        )\n\n    size_mb = os.path.getsize(model_onnx) / (1024 * 1024)\n\
+          \    print(f'ONNX model saved to {model_onnx} ({size_mb:.1f} MB)')\n\n"
+        image: quay.io/cloud-native-robotz-hackathon/pipeline-runtime-image:v2.25
+        resources:
+          cpuLimit: 2.0
+          memoryLimit: 4.0
+          resourceCpuLimit: '2'
+          resourceMemoryLimit: 4G
+    exec-preprocess-data:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - preprocess_data
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef preprocess_data(class_names: str):\n    \"\"\"Split custom training\
+          \ images into train / val / test sets.\n\n    Expects images on the PVC\
+          \ at:\n        /data/custom_training_images/<class>/images/*.jpg\n     \
+          \   /data/custom_training_images/<class>/labels/*.txt\n\n    Produces:\n\
+          \        /data/images/{train,val,test}/\n        /data/labels/{train,val,test}/\n\
+          \    \"\"\"\n    import os\n    import random\n    from glob import glob\n\
+          \    from math import floor\n    from shutil import copy\n\n    data_folder\
+          \ = '/data'\n    download_folder = os.path.join(data_folder, 'custom_training_images')\n\
+          \n    classes = [c.strip() for c in class_names.split(',')]\n    folder_names\
+          \ = [c.lower() for c in classes]\n\n    # Create target directories\n  \
+          \  for kind in ['images', 'labels']:\n        for split in ['train', 'val',\
+          \ 'test']:\n            os.makedirs(os.path.join(data_folder, kind, split),\
+          \ exist_ok=True)\n\n    random.seed(42)\n    train_ratio, val_ratio = 0.75,\
+          \ 0.125\n\n    for folder_name in folder_names:\n        image_dir = os.path.join(download_folder,\
+          \ folder_name, 'images')\n        if not os.path.isdir(image_dir):\n   \
+          \         raise FileNotFoundError(\n                f'Image directory not\
+          \ found: {image_dir}'\n            )\n\n        filenames = sorted(\n  \
+          \          os.path.basename(p)\n            for p in glob(os.path.join(image_dir,\
+          \ '*.jpg'))\n        )\n        if not filenames:\n            raise FileNotFoundError(f'No\
+          \ .jpg images in {image_dir}')\n\n        random.shuffle(filenames)\n  \
+          \      train_size = floor(train_ratio * len(filenames))\n        val_size\
+          \ = floor(val_ratio * len(filenames))\n\n        for i, name in enumerate(filenames):\n\
+          \            if i < train_size:\n                split = 'train'\n     \
+          \       elif i < train_size + val_size:\n                split = 'val'\n\
+          \            else:\n                split = 'test'\n\n            copy(\n\
+          \                os.path.join(download_folder, folder_name, 'images', name),\n\
+          \                os.path.join(data_folder, 'images', split),\n         \
+          \   )\n            label = name.replace('.jpg', '.txt')\n            label_src\
+          \ = os.path.join(\n                download_folder, folder_name, 'labels',\
+          \ label,\n            )\n            if os.path.exists(label_src):\n   \
+          \             copy(label_src, os.path.join(data_folder, 'labels', split))\n\
+          \n        test_size = len(filenames) - train_size - val_size\n        print(\n\
+          \            f'{folder_name}: {len(filenames)} images '\n            f'(train={train_size},\
+          \ val={val_size}, test={test_size})'\n        )\n\n    print('Preprocessing\
+          \ complete.')\n\n"
+        image: quay.io/cloud-native-robotz-hackathon/pipeline-runtime-image:v2.25
+        resources:
+          cpuLimit: 2.0
+          memoryLimit: 8.0
+          resourceCpuLimit: '2'
+          resourceMemoryLimit: 8G
+    exec-train-model:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - train_model
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef train_model(\n    batch_size: int, epochs: int, base_model: str,\
+          \ class_names: str,\n):\n    \"\"\"Train a YOLOv5 object-detection model\
+          \ on CPU.\n\n    Reads preprocessed data from the PVC at /data/images/ and\n\
+          \    writes the trained model to /data/model.pt.\n    \"\"\"\n    import\
+          \ glob\n    import os\n    import subprocess\n    import sys\n    import\
+          \ types\n    from shutil import move\n\n    # Install yolov5 without deps\
+          \ (torch etc. are in the base image) and\n    # add huggingface_hub which\
+          \ yolov5 needs to download pretrained weights.\n    # yolov5 7.x requires\
+          \ huggingface_hub >=0.12,<0.25.\n    subprocess.run(\n        [sys.executable,\
+          \ '-m', 'pip', 'install',\n         '--no-deps', 'yolov5',\n        ], check=True,\n\
+          \    )\n    subprocess.run(\n        [sys.executable, '-m', 'pip', 'install',\n\
+          \         'huggingface_hub>=0.12.0,<0.25.0',\n        ], check=True,\n \
+          \   )\n    # The pip yolov5 package unconditionally imports 'roboflow' (+\
+          \ submodules).\n    # It is not needed \u2014 register lightweight stubs\
+          \ so the import succeeds.\n    _rf = types.ModuleType('roboflow')\n    _rf.__path__\
+          \ = []\n    _rf.Roboflow = type('Roboflow', (), {})\n    _rf_core = types.ModuleType('roboflow.core')\n\
+          \    _rf_core.__path__ = []\n    _rf_core_ver = types.ModuleType('roboflow.core.version')\n\
+          \    _rf_core_ver.Version = type('Version', (), {})\n    _rf.core = _rf_core\n\
+          \    _rf_core.version = _rf_core_ver\n    sys.modules.update({\n       \
+          \ 'roboflow': _rf,\n        'roboflow.core': _rf_core,\n        'roboflow.core.version':\
+          \ _rf_core_ver,\n    })\n\n    import torch\n    import yaml\n\n    workdir\
+          \ = '/tmp/training'\n    os.makedirs(workdir, exist_ok=True)\n    os.chdir(workdir)\n\
+          \n    # Generate configuration.yaml\n    classes = [c.strip() for c in class_names.split(',')]\n\
+          \    config = {\n        'train': '/data/images/train',\n        'val':\
+          \ '/data/images/val',\n        'test': '/data/images/test',\n        'nc':\
+          \ len(classes),\n        'names': classes,\n    }\n    config_path = os.path.join(workdir,\
+          \ 'configuration.yaml')\n    with open(config_path, 'w') as f:\n       \
+          \ yaml.dump(config, f)\n    print(f'Configuration written to {config_path}')\n\
+          \n    # Detect device\n    if torch.cuda.is_available() and torch.cuda.device_count()\
+          \ > 0:\n        device = '0'\n        print(f'Using GPU: {torch.cuda.get_device_name(0)}')\n\
+          \    else:\n        device = 'cpu'\n        print('Using CPU')\n\n    #\
+          \ Run YOLOv5 training\n    from yolov5.train import run as train_run\n\n\
+          \    train_run(\n        data=config_path,\n        weights=f'{base_model}.pt',\n\
+          \        epochs=epochs,\n        batch_size=batch_size,\n        freeze=[10],\n\
+          \        cache='disk',\n        device=device,\n        workers=0,\n   \
+          \     project=os.path.join(workdir, 'runs', 'train'),\n        exist_ok=True,\n\
+          \        save_period=5,\n        patience=50,\n        single_cls=True,\n\
+          \        rect=True,\n        cos_lr=True,\n        close_mosaic=10,\n  \
+          \  )\n\n    # Locate and move trained weights to /data/model.pt\n    search_patterns\
+          \ = [\n        os.path.join(workdir, 'runs/train/exp/weights/best.pt'),\n\
+          \        os.path.join(workdir, 'runs/train/exp*/weights/best.pt'),\n   \
+          \ ]\n    weights_path = None\n    for pattern in search_patterns:\n    \
+          \    matches = glob.glob(pattern)\n        if matches:\n            weights_path\
+          \ = max(matches, key=os.path.getmtime)\n            break\n\n    if not\
+          \ weights_path:\n        pt_files = glob.glob(\n            os.path.join(workdir,\
+          \ 'runs/train/**/*.pt'), recursive=True,\n        )\n        if pt_files:\n\
+          \            weights_path = max(pt_files, key=os.path.getmtime)\n\n    if\
+          \ not weights_path:\n        raise FileNotFoundError('No trained weights\
+          \ found after training!')\n\n    output_path = '/data/model.pt'\n    move(weights_path,\
+          \ output_path)\n    size_mb = os.path.getsize(output_path) / (1024 * 1024)\n\
+          \    print(f'Model saved to {output_path} ({size_mb:.1f} MB)')\n\n"
+        image: quay.io/cloud-native-robotz-hackathon/pipeline-runtime-image:v2.25
+        resources:
+          cpuLimit: 4.0
+          memoryLimit: 8.0
+          resourceCpuLimit: '4'
+          resourceMemoryLimit: 8G
+    exec-upload-model:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - upload_model
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.17.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef upload_model(model_object_prefix: str):\n    \"\"\"Upload the\
+          \ ONNX model to S3-compatible storage.\n\n    Reads /data/model.onnx and\
+          \ uploads it to the bucket configured\n    via the UPLOAD_AWS_* environment\
+          \ variables (injected from a\n    Kubernetes secret).\n\n    Storage layout\
+          \ (OVMS / KServe):\n        models/{prefix}/{timestamp}/model.onnx   (versioned)\n\
+          \        models/{prefix}/1/model.onnx              (latest / serving)\n\
+          \    \"\"\"\n    import os\n    from datetime import datetime\n\n    from\
+          \ boto3 import client as boto3_client\n\n    model_path = '/data/model.onnx'\n\
+          \    if not os.path.exists(model_path):\n        raise FileNotFoundError(f'{model_path}\
+          \ not found')\n\n    s3_endpoint = os.environ['UPLOAD_AWS_S3_ENDPOINT']\n\
+          \    s3_bucket = os.environ['UPLOAD_AWS_S3_BUCKET']\n\n    s3 = boto3_client(\n\
+          \        's3',\n        endpoint_url=s3_endpoint,\n        aws_access_key_id=os.environ['UPLOAD_AWS_ACCESS_KEY_ID'],\n\
+          \        aws_secret_access_key=os.environ['UPLOAD_AWS_SECRET_ACCESS_KEY'],\n\
+          \    )\n\n    version = datetime.now().strftime('%y%m%d%H%M')\n    keys\
+          \ = [\n        f'models/{model_object_prefix}/{version}/model.onnx',\n \
+          \       f'models/{model_object_prefix}/1/model.onnx',\n    ]\n\n    for\
+          \ key in keys:\n        s3.upload_file(model_path, s3_bucket, key)\n   \
+          \     print(f'Uploaded: s3://{s3_bucket}/{key}')\n\n    serving_path = f'models/{model_object_prefix}'\n\
+          \    print(f'OpenShift AI / OVMS model path: {serving_path}')\n    print('Upload\
+          \ complete.')\n\n"
+        image: quay.io/cloud-native-robotz-hackathon/pipeline-runtime-image:v2.25
+        resources:
+          cpuLimit: 1.0
+          memoryLimit: 2.0
+          resourceCpuLimit: '1'
+          resourceMemoryLimit: 2G
+pipelineInfo:
+  description: End-to-end YOLOv5 object-detection training pipeline (CPU).
+  name: object-detection-model-training
+root:
+  dag:
+    tasks:
+      convert-model:
+        cachingOptions: {}
+        componentRef:
+          name: comp-convert-model
+        dependentTasks:
+        - train-model
+        taskInfo:
+          name: convert-model
+      preprocess-data:
+        cachingOptions: {}
+        componentRef:
+          name: comp-preprocess-data
+        inputs:
+          parameters:
+            class_names:
+              componentInputParameter: class_names
+        taskInfo:
+          name: preprocess-data
+      train-model:
+        cachingOptions: {}
+        componentRef:
+          name: comp-train-model
+        dependentTasks:
+        - preprocess-data
+        inputs:
+          parameters:
+            base_model:
+              componentInputParameter: base_model
+            batch_size:
+              componentInputParameter: batch_size
+            class_names:
+              componentInputParameter: class_names
+            epochs:
+              componentInputParameter: epochs
+        taskInfo:
+          name: train-model
+      upload-model:
+        cachingOptions: {}
+        componentRef:
+          name: comp-upload-model
+        dependentTasks:
+        - convert-model
+        inputs:
+          parameters:
+            model_object_prefix:
+              componentInputParameter: model_object_prefix
+        taskInfo:
+          name: upload-model
+  inputDefinitions:
+    parameters:
+      base_model:
+        defaultValue: yolov5n
+        isOptional: true
+        parameterType: STRING
+      batch_size:
+        defaultValue: 16.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      class_names:
+        defaultValue: Fedora
+        isOptional: true
+        parameterType: STRING
+      epochs:
+        defaultValue: 300.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      model_object_prefix:
+        defaultValue: model
+        isOptional: true
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.17.0
+---
+platforms:
+  kubernetes:
+    deploymentSpec:
+      executors:
+        exec-convert-model:
+          pvcMount:
+          - constant: object-detection-training-pvc
+            mountPath: /data
+            pvcNameParameter:
+              runtimeValue:
+                constant: object-detection-training-pvc
+        exec-preprocess-data:
+          pvcMount:
+          - constant: object-detection-training-pvc
+            mountPath: /data
+            pvcNameParameter:
+              runtimeValue:
+                constant: object-detection-training-pvc
+        exec-train-model:
+          pvcMount:
+          - constant: object-detection-training-pvc
+            mountPath: /data
+            pvcNameParameter:
+              runtimeValue:
+                constant: object-detection-training-pvc
+        exec-upload-model:
+          pvcMount:
+          - constant: object-detection-training-pvc
+            mountPath: /data
+            pvcNameParameter:
+              runtimeValue:
+                constant: object-detection-training-pvc
+          secretAsEnv:
+          - keyToEnv:
+            - envVar: UPLOAD_AWS_SECRET_ACCESS_KEY
+              secretKey: AWS_SECRET_ACCESS_KEY
+            - envVar: UPLOAD_AWS_ACCESS_KEY_ID
+              secretKey: AWS_ACCESS_KEY_ID
+            - envVar: UPLOAD_AWS_S3_BUCKET
+              secretKey: AWS_S3_BUCKET
+            - envVar: UPLOAD_AWS_S3_ENDPOINT
+              secretKey: AWS_S3_ENDPOINT
+            optional: false
+            secretName: workbench-bucket-ai-connection
+            secretNameParameter:
+              runtimeValue:
+                constant: workbench-bucket-ai-connection
