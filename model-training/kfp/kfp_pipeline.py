@@ -33,6 +33,7 @@ RUNTIME_IMAGE = (
 )
 DATA_PVC_NAME = 'object-detection-training-pvc'
 DATA_PVC_MOUNT = '/data'
+SHM_PVC_NAME = 'shared-memory-pvc'
 S3_SECRET_NAME = 'workbench-bucket-ai-connection'
 
 
@@ -58,6 +59,25 @@ def preprocess_data(class_names: str):
 
     data_folder = '/data'
     download_folder = os.path.join(data_folder, 'custom_training_images')
+
+    # Pre-cache YOLOv5 v7.0 repo on the PVC so train/convert steps
+    # don't need to download from GitHub (avoids rate-limits and SPOF).
+    yolov5_pvc = os.path.join(data_folder, 'yolov5')
+    if not os.path.isdir(yolov5_pvc):
+        import urllib.request
+        import zipfile
+
+        url = 'https://github.com/ultralytics/yolov5/archive/refs/tags/v7.0.zip'
+        zip_path = os.path.join(data_folder, 'yolov5.zip')
+        print('Pre-caching ultralytics YOLOv5 v7.0 on PVC …')
+        urllib.request.urlretrieve(url, zip_path)
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(data_folder)
+        os.rename(os.path.join(data_folder, 'yolov5-7.0'), yolov5_pvc)
+        os.remove(zip_path)
+        print('YOLOv5 v7.0 cached at /data/yolov5/')
+    else:
+        print('YOLOv5 v7.0 already cached on PVC.')
 
     classes = [c.strip() for c in class_names.split(',')]
     folder_names = [c.lower() for c in classes]
@@ -122,52 +142,40 @@ def train_model(
 ):
     """Train a YOLOv5 object-detection model on CPU.
 
+    Uses the original ultralytics YOLOv5 code (same as the Elyra
+    pipeline's bundled yolov5/ directory) — NOT the fcakyon pip
+    package which has different convergence behavior.
+
     Reads preprocessed data from the PVC at /data/images/ and
     writes the trained model to /data/model.pt.
     """
     import glob
     import os
-    import subprocess
     import sys
-    import types
     from shutil import move
 
-    # Install yolov5 without deps (torch etc. are in the base image) and
-    # add huggingface_hub which yolov5 needs to download pretrained weights.
-    # yolov5 7.x requires huggingface_hub >=0.12,<0.25.
-    subprocess.run(
-        [sys.executable, '-m', 'pip', 'install',
-         '--no-deps', 'yolov5',
-        ], check=True,
-    )
-    subprocess.run(
-        [sys.executable, '-m', 'pip', 'install',
-         'huggingface_hub>=0.12.0,<0.25.0',
-        ], check=True,
-    )
-    # The pip yolov5 package unconditionally imports 'roboflow' (+ submodules).
-    # It is not needed — register lightweight stubs so the import succeeds.
-    _rf = types.ModuleType('roboflow')
-    _rf.__path__ = []
-    _rf.Roboflow = type('Roboflow', (), {})
-    _rf_core = types.ModuleType('roboflow.core')
-    _rf_core.__path__ = []
-    _rf_core_ver = types.ModuleType('roboflow.core.version')
-    _rf_core_ver.Version = type('Version', (), {})
-    _rf.core = _rf_core
-    _rf_core.version = _rf_core_ver
-    sys.modules.update({
-        'roboflow': _rf,
-        'roboflow.core': _rf_core,
-        'roboflow.core.version': _rf_core_ver,
-    })
-
-    import torch
-    import yaml
+    # Set thread counts before importing PyTorch to avoid
+    # oversubscription when multiple pods share a node.
+    os.environ['OMP_NUM_THREADS'] = '32'
+    os.environ['MKL_NUM_THREADS'] = '32'
 
     workdir = '/tmp/training'
     os.makedirs(workdir, exist_ok=True)
     os.chdir(workdir)
+
+    # Use YOLOv5 v7.0 pre-cached on the PVC by the preprocess step.
+    yolov5_dir = '/data/yolov5'
+    if not os.path.isdir(yolov5_dir):
+        raise FileNotFoundError(
+            'YOLOv5 not found at /data/yolov5 — '
+            'preprocess step should have cached it'
+        )
+    print('Using PVC-cached YOLOv5 v7.0')
+
+    sys.path.insert(0, yolov5_dir)
+
+    import torch
+    import yaml
 
     # Generate configuration.yaml
     classes = [c.strip() for c in class_names.split(',')]
@@ -191,8 +199,8 @@ def train_model(
         device = 'cpu'
         print('Using CPU')
 
-    # Run YOLOv5 training
-    from yolov5.train import run as train_run
+    # Run YOLOv5 training (ultralytics repo version)
+    from train import run as train_run
 
     train_run(
         data=config_path,
@@ -200,9 +208,9 @@ def train_model(
         epochs=epochs,
         batch_size=batch_size,
         freeze=[10],
-        cache='disk',
+        cache='ram',
         device=device,
-        workers=0,
+        workers=8,
         project=os.path.join(workdir, 'runs', 'train'),
         exist_ok=True,
         save_period=5,
@@ -246,44 +254,31 @@ def convert_model():
     """Convert the trained PyTorch model (.pt) to ONNX.
 
     Reads /data/model.pt, writes /data/model.onnx.
+    Uses the ultralytics YOLOv5 repo code (same as train step).
     """
     import os
-    import subprocess
     import sys
-    import types
 
-    # Install yolov5 (--no-deps) + huggingface_hub for weight loading
-    subprocess.run(
-        [sys.executable, '-m', 'pip', 'install',
-         '--no-deps', 'yolov5',
-        ], check=True,
-    )
-    subprocess.run(
-        [sys.executable, '-m', 'pip', 'install',
-         'huggingface_hub>=0.12.0,<0.25.0',
-        ], check=True,
-    )
-    # Stub out 'roboflow' — not needed but imported by the pip package
-    _rf = types.ModuleType('roboflow')
-    _rf.__path__ = []
-    _rf.Roboflow = type('Roboflow', (), {})
-    _rf_core = types.ModuleType('roboflow.core')
-    _rf_core.__path__ = []
-    _rf_core_ver = types.ModuleType('roboflow.core.version')
-    _rf_core_ver.Version = type('Version', (), {})
-    _rf.core = _rf_core
-    _rf_core.version = _rf_core_ver
-    sys.modules.update({
-        'roboflow': _rf,
-        'roboflow.core': _rf_core,
-        'roboflow.core.version': _rf_core_ver,
-    })
+    workdir = '/tmp/convert'
+    os.makedirs(workdir, exist_ok=True)
+    os.chdir(workdir)
+
+    # Use YOLOv5 v7.0 pre-cached on the PVC by the preprocess step.
+    yolov5_dir = '/data/yolov5'
+    if not os.path.isdir(yolov5_dir):
+        raise FileNotFoundError(
+            'YOLOv5 not found at /data/yolov5 — '
+            'preprocess step should have cached it'
+        )
+    print('Using PVC-cached YOLOv5 v7.0')
+
+    sys.path.insert(0, yolov5_dir)
 
     model_pt = '/data/model.pt'
     if not os.path.exists(model_pt):
         raise FileNotFoundError(f'{model_pt} not found')
 
-    from yolov5.export import run as export_run
+    from export import run as export_run
 
     export_run(
         weights=model_pt,
@@ -370,7 +365,7 @@ def model_training_pipeline(
         mount_path=DATA_PVC_MOUNT,
     )
     preprocess_task.set_caching_options(False)
-    preprocess_task.set_cpu_limit('2').set_memory_limit('8G')
+    preprocess_task.set_cpu_request('2').set_memory_request('8G')
 
     # Step 2 — Model training ───────────────────────────────────
     train_task = train_model(
@@ -384,9 +379,21 @@ def model_training_pipeline(
         pvc_name=DATA_PVC_NAME,
         mount_path=DATA_PVC_MOUNT,
     )
+    # Mount the shared-memory PVC at /dev/shm (same as Elyra pipeline).
+    # Using a real PVC avoids the emptyDir Memory penalty where tmpfs
+    # usage counts against the container memory cgroup.
+    mount_pvc(
+        train_task,
+        pvc_name=SHM_PVC_NAME,
+        mount_path='/dev/shm',
+    )
     train_task.after(preprocess_task)
     train_task.set_caching_options(False)
-    train_task.set_cpu_limit('4').set_memory_limit('8G')
+    # Request 16 CPUs to force the scheduler to place at most one
+    # training pod per 32-CPU node, eliminating CPU burst contention
+    # when 9 pipelines run in parallel.  No limits — pod can still
+    # burst to all 32 node CPUs.
+    train_task.set_cpu_request('16').set_memory_request('8G')
 
     # Step 3 — ONNX conversion ─────────────────────────────────
     convert_task = convert_model()
@@ -397,7 +404,7 @@ def model_training_pipeline(
     )
     convert_task.after(train_task)
     convert_task.set_caching_options(False)
-    convert_task.set_cpu_limit('2').set_memory_limit('4G')
+    convert_task.set_cpu_request('2').set_memory_request('4G')
 
     # Step 4 — Upload to S3 ────────────────────────────────────
     upload_task = upload_model(model_object_prefix=model_object_prefix)
@@ -418,7 +425,7 @@ def model_training_pipeline(
     )
     upload_task.after(convert_task)
     upload_task.set_caching_options(False)
-    upload_task.set_cpu_limit('1').set_memory_limit('2G')
+    upload_task.set_cpu_request('1').set_memory_request('2G')
 
 
 # ── CLI entry-point: compile to YAML ──────────────────────────────

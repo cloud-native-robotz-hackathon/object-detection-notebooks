@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# YOLOv5 training artifacts (produced at runtime on PVC)
+runs/
+*.pt
+*.onnx
+
+# HuggingFace cache
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# KFP compiled pipeline (regenerated from kfp_pipeline.py)
+# Uncomment the line below to track it in git:
+# !model-training/kfp/pipeline.yaml
