@@ -64,21 +64,16 @@ deploymentSpec:
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef convert_model():\n    \"\"\"Convert the trained PyTorch model\
           \ (.pt) to ONNX.\n\n    Reads /data/model.pt, writes /data/model.onnx.\n\
-          \    \"\"\"\n    import os\n    import subprocess\n    import sys\n    import\
-          \ types\n\n    # Install yolov5 (--no-deps) + huggingface_hub for weight\
-          \ loading\n    subprocess.run(\n        [sys.executable, '-m', 'pip', 'install',\n\
-          \         '--no-deps', 'yolov5',\n        ], check=True,\n    )\n    subprocess.run(\n\
-          \        [sys.executable, '-m', 'pip', 'install',\n         'huggingface_hub>=0.12.0,<0.25.0',\n\
-          \        ], check=True,\n    )\n    # Stub out 'roboflow' \u2014 not needed\
-          \ but imported by the pip package\n    _rf = types.ModuleType('roboflow')\n\
-          \    _rf.__path__ = []\n    _rf.Roboflow = type('Roboflow', (), {})\n  \
-          \  _rf_core = types.ModuleType('roboflow.core')\n    _rf_core.__path__ =\
-          \ []\n    _rf_core_ver = types.ModuleType('roboflow.core.version')\n   \
-          \ _rf_core_ver.Version = type('Version', (), {})\n    _rf.core = _rf_core\n\
-          \    _rf_core.version = _rf_core_ver\n    sys.modules.update({\n       \
-          \ 'roboflow': _rf,\n        'roboflow.core': _rf_core,\n        'roboflow.core.version':\
-          \ _rf_core_ver,\n    })\n\n    model_pt = '/data/model.pt'\n    if not os.path.exists(model_pt):\n\
-          \        raise FileNotFoundError(f'{model_pt} not found')\n\n    from yolov5.export\
+          \    Uses the ultralytics YOLOv5 repo code (same as train step).\n    \"\
+          \"\"\n    import os\n    import sys\n\n    workdir = '/tmp/convert'\n  \
+          \  os.makedirs(workdir, exist_ok=True)\n    os.chdir(workdir)\n\n    # Use\
+          \ YOLOv5 v7.0 pre-cached on the PVC by the preprocess step.\n    yolov5_dir\
+          \ = '/data/yolov5'\n    if not os.path.isdir(yolov5_dir):\n        raise\
+          \ FileNotFoundError(\n            'YOLOv5 not found at /data/yolov5 \u2014\
+          \ '\n            'preprocess step should have cached it'\n        )\n  \
+          \  print('Using PVC-cached YOLOv5 v7.0')\n\n    sys.path.insert(0, yolov5_dir)\n\
+          \n    model_pt = '/data/model.pt'\n    if not os.path.exists(model_pt):\n\
+          \        raise FileNotFoundError(f'{model_pt} not found')\n\n    from export\
           \ import run as export_run\n\n    export_run(\n        weights=model_pt,\n\
           \        include=['onnx'],\n        imgsz=(640, 640),\n        opset=13,\n\
           \        device='cpu',\n        verbose=True,\n    )\n\n    model_onnx =\
@@ -88,10 +83,10 @@ deploymentSpec:
           \    print(f'ONNX model saved to {model_onnx} ({size_mb:.1f} MB)')\n\n"
         image: quay.io/cloud-native-robotz-hackathon/pipeline-runtime-image:v2.25
         resources:
-          cpuLimit: 2.0
-          memoryLimit: 4.0
-          resourceCpuLimit: '2'
-          resourceMemoryLimit: 4G
+          cpuRequest: 2.0
+          memoryRequest: 4.0
+          resourceCpuRequest: '2'
+          resourceMemoryRequest: 4G
     exec-preprocess-data:
       container:
         args:
@@ -126,23 +121,35 @@ deploymentSpec:
           \    \"\"\"\n    import os\n    import random\n    from glob import glob\n\
           \    from math import floor\n    from shutil import copy\n\n    data_folder\
           \ = '/data'\n    download_folder = os.path.join(data_folder, 'custom_training_images')\n\
-          \n    classes = [c.strip() for c in class_names.split(',')]\n    folder_names\
-          \ = [c.lower() for c in classes]\n\n    # Create target directories\n  \
-          \  for kind in ['images', 'labels']:\n        for split in ['train', 'val',\
-          \ 'test']:\n            os.makedirs(os.path.join(data_folder, kind, split),\
-          \ exist_ok=True)\n\n    random.seed(42)\n    train_ratio, val_ratio = 0.75,\
-          \ 0.125\n\n    for folder_name in folder_names:\n        image_dir = os.path.join(download_folder,\
-          \ folder_name, 'images')\n        if not os.path.isdir(image_dir):\n   \
-          \         raise FileNotFoundError(\n                f'Image directory not\
-          \ found: {image_dir}'\n            )\n\n        filenames = sorted(\n  \
-          \          os.path.basename(p)\n            for p in glob(os.path.join(image_dir,\
-          \ '*.jpg'))\n        )\n        if not filenames:\n            raise FileNotFoundError(f'No\
-          \ .jpg images in {image_dir}')\n\n        random.shuffle(filenames)\n  \
-          \      train_size = floor(train_ratio * len(filenames))\n        val_size\
-          \ = floor(val_ratio * len(filenames))\n\n        for i, name in enumerate(filenames):\n\
-          \            if i < train_size:\n                split = 'train'\n     \
-          \       elif i < train_size + val_size:\n                split = 'val'\n\
-          \            else:\n                split = 'test'\n\n            copy(\n\
+          \n    # Pre-cache YOLOv5 v7.0 repo on the PVC so train/convert steps\n \
+          \   # don't need to download from GitHub (avoids rate-limits and SPOF).\n\
+          \    yolov5_pvc = os.path.join(data_folder, 'yolov5')\n    if not os.path.isdir(yolov5_pvc):\n\
+          \        import urllib.request\n        import zipfile\n\n        url =\
+          \ 'https://github.com/ultralytics/yolov5/archive/refs/tags/v7.0.zip'\n \
+          \       zip_path = os.path.join(data_folder, 'yolov5.zip')\n        print('Pre-caching\
+          \ ultralytics YOLOv5 v7.0 on PVC \u2026')\n        urllib.request.urlretrieve(url,\
+          \ zip_path)\n        with zipfile.ZipFile(zip_path) as zf:\n           \
+          \ zf.extractall(data_folder)\n        os.rename(os.path.join(data_folder,\
+          \ 'yolov5-7.0'), yolov5_pvc)\n        os.remove(zip_path)\n        print('YOLOv5\
+          \ v7.0 cached at /data/yolov5/')\n    else:\n        print('YOLOv5 v7.0\
+          \ already cached on PVC.')\n\n    classes = [c.strip() for c in class_names.split(',')]\n\
+          \    folder_names = [c.lower() for c in classes]\n\n    # Create target\
+          \ directories\n    for kind in ['images', 'labels']:\n        for split\
+          \ in ['train', 'val', 'test']:\n            os.makedirs(os.path.join(data_folder,\
+          \ kind, split), exist_ok=True)\n\n    random.seed(42)\n    train_ratio,\
+          \ val_ratio = 0.75, 0.125\n\n    for folder_name in folder_names:\n    \
+          \    image_dir = os.path.join(download_folder, folder_name, 'images')\n\
+          \        if not os.path.isdir(image_dir):\n            raise FileNotFoundError(\n\
+          \                f'Image directory not found: {image_dir}'\n           \
+          \ )\n\n        filenames = sorted(\n            os.path.basename(p)\n  \
+          \          for p in glob(os.path.join(image_dir, '*.jpg'))\n        )\n\
+          \        if not filenames:\n            raise FileNotFoundError(f'No .jpg\
+          \ images in {image_dir}')\n\n        random.shuffle(filenames)\n       \
+          \ train_size = floor(train_ratio * len(filenames))\n        val_size = floor(val_ratio\
+          \ * len(filenames))\n\n        for i, name in enumerate(filenames):\n  \
+          \          if i < train_size:\n                split = 'train'\n       \
+          \     elif i < train_size + val_size:\n                split = 'val'\n \
+          \           else:\n                split = 'test'\n\n            copy(\n\
           \                os.path.join(download_folder, folder_name, 'images', name),\n\
           \                os.path.join(data_folder, 'images', split),\n         \
           \   )\n            label = name.replace('.jpg', '.txt')\n            label_src\
@@ -155,10 +162,10 @@ deploymentSpec:
           \ complete.')\n\n"
         image: quay.io/cloud-native-robotz-hackathon/pipeline-runtime-image:v2.25
         resources:
-          cpuLimit: 2.0
-          memoryLimit: 8.0
-          resourceCpuLimit: '2'
-          resourceMemoryLimit: 8G
+          cpuRequest: 2.0
+          memoryRequest: 8.0
+          resourceCpuRequest: '2'
+          resourceMemoryRequest: 8G
     exec-train-model:
       container:
         args:
@@ -187,47 +194,42 @@ deploymentSpec:
         - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
           \ *\n\ndef train_model(\n    batch_size: int, epochs: int, base_model: str,\
           \ class_names: str,\n):\n    \"\"\"Train a YOLOv5 object-detection model\
-          \ on CPU.\n\n    Reads preprocessed data from the PVC at /data/images/ and\n\
-          \    writes the trained model to /data/model.pt.\n    \"\"\"\n    import\
-          \ glob\n    import os\n    import subprocess\n    import sys\n    import\
-          \ types\n    from shutil import move\n\n    # Install yolov5 without deps\
-          \ (torch etc. are in the base image) and\n    # add huggingface_hub which\
-          \ yolov5 needs to download pretrained weights.\n    # yolov5 7.x requires\
-          \ huggingface_hub >=0.12,<0.25.\n    subprocess.run(\n        [sys.executable,\
-          \ '-m', 'pip', 'install',\n         '--no-deps', 'yolov5',\n        ], check=True,\n\
-          \    )\n    subprocess.run(\n        [sys.executable, '-m', 'pip', 'install',\n\
-          \         'huggingface_hub>=0.12.0,<0.25.0',\n        ], check=True,\n \
-          \   )\n    # The pip yolov5 package unconditionally imports 'roboflow' (+\
-          \ submodules).\n    # It is not needed \u2014 register lightweight stubs\
-          \ so the import succeeds.\n    _rf = types.ModuleType('roboflow')\n    _rf.__path__\
-          \ = []\n    _rf.Roboflow = type('Roboflow', (), {})\n    _rf_core = types.ModuleType('roboflow.core')\n\
-          \    _rf_core.__path__ = []\n    _rf_core_ver = types.ModuleType('roboflow.core.version')\n\
-          \    _rf_core_ver.Version = type('Version', (), {})\n    _rf.core = _rf_core\n\
-          \    _rf_core.version = _rf_core_ver\n    sys.modules.update({\n       \
-          \ 'roboflow': _rf,\n        'roboflow.core': _rf_core,\n        'roboflow.core.version':\
-          \ _rf_core_ver,\n    })\n\n    import torch\n    import yaml\n\n    workdir\
-          \ = '/tmp/training'\n    os.makedirs(workdir, exist_ok=True)\n    os.chdir(workdir)\n\
-          \n    # Generate configuration.yaml\n    classes = [c.strip() for c in class_names.split(',')]\n\
-          \    config = {\n        'train': '/data/images/train',\n        'val':\
-          \ '/data/images/val',\n        'test': '/data/images/test',\n        'nc':\
-          \ len(classes),\n        'names': classes,\n    }\n    config_path = os.path.join(workdir,\
+          \ on CPU.\n\n    Uses the original ultralytics YOLOv5 code (same as the\
+          \ Elyra\n    pipeline's bundled yolov5/ directory) \u2014 NOT the fcakyon\
+          \ pip\n    package which has different convergence behavior.\n\n    Reads\
+          \ preprocessed data from the PVC at /data/images/ and\n    writes the trained\
+          \ model to /data/model.pt.\n    \"\"\"\n    import glob\n    import os\n\
+          \    import sys\n    from shutil import move\n\n    # Set thread counts\
+          \ before importing PyTorch to avoid\n    # oversubscription when multiple\
+          \ pods share a node.\n    os.environ['OMP_NUM_THREADS'] = '32'\n    os.environ['MKL_NUM_THREADS']\
+          \ = '32'\n\n    workdir = '/tmp/training'\n    os.makedirs(workdir, exist_ok=True)\n\
+          \    os.chdir(workdir)\n\n    # Use YOLOv5 v7.0 pre-cached on the PVC by\
+          \ the preprocess step.\n    yolov5_dir = '/data/yolov5'\n    if not os.path.isdir(yolov5_dir):\n\
+          \        raise FileNotFoundError(\n            'YOLOv5 not found at /data/yolov5\
+          \ \u2014 '\n            'preprocess step should have cached it'\n      \
+          \  )\n    print('Using PVC-cached YOLOv5 v7.0')\n\n    sys.path.insert(0,\
+          \ yolov5_dir)\n\n    import torch\n    import yaml\n\n    # Generate configuration.yaml\n\
+          \    classes = [c.strip() for c in class_names.split(',')]\n    config =\
+          \ {\n        'train': '/data/images/train',\n        'val': '/data/images/val',\n\
+          \        'test': '/data/images/test',\n        'nc': len(classes),\n   \
+          \     'names': classes,\n    }\n    config_path = os.path.join(workdir,\
           \ 'configuration.yaml')\n    with open(config_path, 'w') as f:\n       \
           \ yaml.dump(config, f)\n    print(f'Configuration written to {config_path}')\n\
           \n    # Detect device\n    if torch.cuda.is_available() and torch.cuda.device_count()\
           \ > 0:\n        device = '0'\n        print(f'Using GPU: {torch.cuda.get_device_name(0)}')\n\
           \    else:\n        device = 'cpu'\n        print('Using CPU')\n\n    #\
-          \ Run YOLOv5 training\n    from yolov5.train import run as train_run\n\n\
-          \    train_run(\n        data=config_path,\n        weights=f'{base_model}.pt',\n\
-          \        epochs=epochs,\n        batch_size=batch_size,\n        freeze=[10],\n\
-          \        cache='disk',\n        device=device,\n        workers=0,\n   \
-          \     project=os.path.join(workdir, 'runs', 'train'),\n        exist_ok=True,\n\
-          \        save_period=5,\n        patience=50,\n        single_cls=True,\n\
-          \        rect=True,\n        cos_lr=True,\n        close_mosaic=10,\n  \
-          \  )\n\n    # Locate and move trained weights to /data/model.pt\n    search_patterns\
-          \ = [\n        os.path.join(workdir, 'runs/train/exp/weights/best.pt'),\n\
-          \        os.path.join(workdir, 'runs/train/exp*/weights/best.pt'),\n   \
-          \ ]\n    weights_path = None\n    for pattern in search_patterns:\n    \
-          \    matches = glob.glob(pattern)\n        if matches:\n            weights_path\
+          \ Run YOLOv5 training (ultralytics repo version)\n    from train import\
+          \ run as train_run\n\n    train_run(\n        data=config_path,\n      \
+          \  weights=f'{base_model}.pt',\n        epochs=epochs,\n        batch_size=batch_size,\n\
+          \        freeze=[10],\n        cache='ram',\n        device=device,\n  \
+          \      workers=8,\n        project=os.path.join(workdir, 'runs', 'train'),\n\
+          \        exist_ok=True,\n        save_period=5,\n        patience=50,\n\
+          \        single_cls=True,\n        rect=True,\n        cos_lr=True,\n  \
+          \      close_mosaic=10,\n    )\n\n    # Locate and move trained weights\
+          \ to /data/model.pt\n    search_patterns = [\n        os.path.join(workdir,\
+          \ 'runs/train/exp/weights/best.pt'),\n        os.path.join(workdir, 'runs/train/exp*/weights/best.pt'),\n\
+          \    ]\n    weights_path = None\n    for pattern in search_patterns:\n \
+          \       matches = glob.glob(pattern)\n        if matches:\n            weights_path\
           \ = max(matches, key=os.path.getmtime)\n            break\n\n    if not\
           \ weights_path:\n        pt_files = glob.glob(\n            os.path.join(workdir,\
           \ 'runs/train/**/*.pt'), recursive=True,\n        )\n        if pt_files:\n\
@@ -238,10 +240,10 @@ deploymentSpec:
           \    print(f'Model saved to {output_path} ({size_mb:.1f} MB)')\n\n"
         image: quay.io/cloud-native-robotz-hackathon/pipeline-runtime-image:v2.25
         resources:
-          cpuLimit: 4.0
-          memoryLimit: 8.0
-          resourceCpuLimit: '4'
-          resourceMemoryLimit: 8G
+          cpuRequest: 16.0
+          memoryRequest: 8.0
+          resourceCpuRequest: '16'
+          resourceMemoryRequest: 8G
     exec-upload-model:
       container:
         args:
@@ -290,10 +292,10 @@ deploymentSpec:
           \ complete.')\n\n"
         image: quay.io/cloud-native-robotz-hackathon/pipeline-runtime-image:v2.25
         resources:
-          cpuLimit: 1.0
-          memoryLimit: 2.0
-          resourceCpuLimit: '1'
-          resourceMemoryLimit: 2G
+          cpuRequest: 1.0
+          memoryRequest: 2.0
+          resourceCpuRequest: '1'
+          resourceMemoryRequest: 2G
 pipelineInfo:
   description: End-to-end YOLOv5 object-detection training pipeline (CPU).
   name: object-detection-model-training
@@ -398,6 +400,11 @@ platforms:
             pvcNameParameter:
               runtimeValue:
                 constant: object-detection-training-pvc
+          - constant: shared-memory-pvc
+            mountPath: /dev/shm
+            pvcNameParameter:
+              runtimeValue:
+                constant: shared-memory-pvc
         exec-upload-model:
           pvcMount:
           - constant: object-detection-training-pvc
